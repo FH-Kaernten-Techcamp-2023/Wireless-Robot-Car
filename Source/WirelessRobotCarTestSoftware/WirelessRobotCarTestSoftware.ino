@@ -3,10 +3,30 @@
 #include <ArduinoWebsockets.h>
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
+#include "SPIFFS.h"
 
 
 #include "config.h"
 #include "web.h"
+
+// Stores LED state
+String ledState;
+
+// Replaces placeholder with LED state value
+String processor(const String& var){
+  Serial.println(var);
+  if(var == "STATE"){
+    if(digitalRead(LEDFL)){
+      ledState = "ON";
+    }
+    else{
+      ledState = "OFF";
+    }
+    Serial.print(ledState);
+    return ledState;
+  }
+  return String();
+}
 
 
 void setup()
@@ -42,6 +62,14 @@ void setup()
    ledcAttachPin(AIN2, 1);
    ledcAttachPin(BIN1, 2);
    ledcAttachPin(BIN2, 3);
+
+   // Initialize SPIFFS
+  if(!SPIFFS.begin(true)){
+    Serial.println("An Error has occurred while mounting SPIFFS");
+    return;
+  }
+
+   
    char ssid[29];
 
 
@@ -59,12 +87,34 @@ void setup()
   Serial.println(IP);
   Serial.print("AP SSID: ");
   Serial.println(ssid);
-
+/*
   // HTTP handler assignment
   webserver.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
     AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", index_html_gz, sizeof(index_html_gz));
     response->addHeader("Content-Encoding", "gzip");
     request->send(response);
+  });
+*/
+  // Route for root / web page
+  webserver.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(SPIFFS, "/index.html", String(), false, processor);
+  });
+  
+  // Route to load style.css file
+  webserver.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(SPIFFS, "/style.css", "text/css");
+  });
+
+  // Route to set GPIO to HIGH
+  webserver.on("/on", HTTP_GET, [](AsyncWebServerRequest *request){
+    digitalWrite(LEDFL, HIGH);    
+    request->send(SPIFFS, "/index.html", String(), false, processor);
+  });
+  
+  // Route to set GPIO to LOW
+  webserver.on("/off", HTTP_GET, [](AsyncWebServerRequest *request){
+    digitalWrite(LEDFL, LOW);    
+    request->send(SPIFFS, "/index.html", String(), false, processor);
   });
 
   // start server
@@ -100,11 +150,12 @@ void handle_message(WebsocketsMessage msg) {
     ledcWrite(2, 0);  
     ledcWrite(3, RValue);  
   }
-
+/*
   digitalWrite(LEDFL, !digitalRead(LEDFL));
   digitalWrite(LEDFR, !digitalRead(LEDFR));
   digitalWrite(LEDBL, !digitalRead(LEDBL));
   digitalWrite(LEDBR, !digitalRead(LEDBR));
+  */
 
   Serial.print(digitalRead(WheelEncL));
   Serial.print(" ");
